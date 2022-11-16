@@ -20,12 +20,13 @@ extern void forkret(void);
 extern void trapret(void);
 
 static void wakeup1(void *chan);
-struct spinlock memlock;
+struct spinlock memorylock;
 
 void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+  initlock(&memorylock, "memorylock");
 }
 
 // Must be called with interrupts disabled
@@ -175,7 +176,7 @@ growproc(int n)
 
   struct proc *p;
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-    if (p->isThread == 1 && p->parentThread == curproc)
+    if (p->isThread == 1 && p->parent == curproc)
       p->sz = sz;
   }
   switchuvm(curproc);
@@ -259,7 +260,7 @@ exit(void)
 
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
-  wakeup1(curproc->parentThread);
+  // wakeup1(curproc->parentThread);
 
   // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -569,7 +570,7 @@ clone(void(*fcn)(void *, void *), void *arg1, void *arg2, void *stack)
 
   np->pgdir = curproc->pgdir;
   np->sz = curproc->sz;
-  np->parentThread = curproc;
+  // np->parentThread = curproc;
   *np->tf = *curproc->tf;
   np->isThread = 1;
 
@@ -585,6 +586,7 @@ clone(void(*fcn)(void *, void *), void *arg1, void *arg2, void *stack)
   np->tf->esp = (uint) stack + PGSIZE - 12;
   // np->tf->ebp = np->tf->esp;
   np->tf->eip = (uint) fcn;
+
   np->ustack = stack;
 
   for(i = 0; i < NOFILE; i++)
@@ -616,7 +618,7 @@ join(void **stack)
     // Scan through table looking for exited children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->isThread == 0 || p->parentThread != curproc)
+      if(p->isThread == 0 || p->parent != curproc)
         continue;
       havekids = 1;
       if(p->state == ZOMBIE){
@@ -627,7 +629,7 @@ join(void **stack)
         // freevm(p->pgdir);
         p->pid = 0;
         p->parent = 0;
-        p->parentThread = 0;
+        // p->parentThread = 0;
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;

@@ -7,13 +7,6 @@
 #include "param.h"
 #include <stddef.h>
 
-typedef struct thread_table
-{
-    void *ptr;
-    void *ustack;
-    int inuse;
-} thread_table;
-
 struct thread_table threadTable[NPROC];
 char*
 strcpy(char *s, const char *t)
@@ -119,13 +112,10 @@ memmove(void *vdst, const void *vsrc, int n)
 int 
 thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2)
 {
-  // void *stack;
-  // stack = malloc(PGSIZE);
-  // return clone(start_routine, arg1, arg2, stack);
   void *stack, *p = malloc(2*PGSIZE);
   if(p == NULL)
     return -1;
-  if((uint)p % PGSIZE)
+  if((uint)p % PGSIZE != 0 )
     stack = p + (PGSIZE - (uint)p % PGSIZE);
   else
     stack = p;
@@ -137,8 +127,8 @@ thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2)
 int 
 thread_join(void)
 {
-  void **stack = NULL;
-  int pid = join(stack);
+  void *stack = NULL;
+  int pid = join(&stack);
   return pid;
 }
 

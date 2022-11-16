@@ -51,10 +51,14 @@ sys_sbrk(void)
 
   if(argint(0, &n) < 0)
     return -1;
+
   addr = myproc()->sz;
+  acquire(&memorylock);
   if(growproc(n) < 0){
+    release(&memorylock);
     return -1;
   }
+  release(&memorylock);
   return addr;
 }
 
