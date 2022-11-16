@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include <stdio.h>
 
 struct {
   struct spinlock lock;
@@ -19,6 +20,7 @@ extern void forkret(void);
 extern void trapret(void);
 
 static void wakeup1(void *chan);
+struct spinlock memlock;
 
 void
 pinit(void)
@@ -170,6 +172,12 @@ growproc(int n)
       return -1;
   }
   curproc->sz = sz;
+
+  struct proc *p;
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if (p->isThread == 1 && p->parentThread == curproc)
+      p->sz = sz;
+  }
   switchuvm(curproc);
   return 0;
 }
@@ -251,6 +259,7 @@ exit(void)
 
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
+  wakeup1(curproc->parentThread);
 
   // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -551,12 +560,12 @@ clone(void(*fcn)(void *, void *), void *arg1, void *arg2, void *stack)
   if((np = allocproc()) == 0)
     return -1;
   
-  if(curproc->isThread == 1) { // Nested condition
-    np->parent = curproc -> parent;
-  }
-  else { // Current is a process, not a thread
-    np->parent = curproc;
-  }
+  // if(curproc->isThread == 1) { // Nested condition
+  //   np->parent = curproc -> parent;
+  // }
+  // else { // Current is a process, not a thread
+  np->parent = curproc;
+  // }
 
   np->pgdir = curproc->pgdir;
   np->sz = curproc->sz;
@@ -568,15 +577,15 @@ clone(void(*fcn)(void *, void *), void *arg1, void *arg2, void *stack)
 // curr ->clone: npth1 --> npth1'parent = curr
 
 // curr ->clone: npthwithparent --> npthwitharent'parentthread = curr
-  np->ustack = stack;
   *((uint*) (stack + PGSIZE - 12)) = 0xffffffff;
 
   *((uint*) (stack + PGSIZE - 4)) = (uint)arg2;
   *((uint*) (stack + PGSIZE - 8)) = (uint)arg1;
 
   np->tf->esp = (uint) stack + PGSIZE - 12;
-  np->tf->ebp = np->tf->esp;
+  // np->tf->ebp = np->tf->esp;
   np->tf->eip = (uint) fcn;
+  np->ustack = stack;
 
   for(i = 0; i < NOFILE; i++)
     if(curproc->ofile[i])
@@ -607,7 +616,7 @@ join(void **stack)
     // Scan through table looking for exited children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parentThread != curproc)
+      if(p->isThread == 0 || p->parentThread != curproc)
         continue;
       havekids = 1;
       if(p->state == ZOMBIE){

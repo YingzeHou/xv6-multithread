@@ -9,6 +9,7 @@
 
 typedef struct thread_table
 {
+    void *ptr;
     void *ustack;
     int inuse;
 } thread_table;
@@ -121,21 +122,13 @@ thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2)
   // void *stack;
   // stack = malloc(PGSIZE);
   // return clone(start_routine, arg1, arg2, stack);
-  void *stack, *p = malloc(PGSIZE * 2);
+  void *stack, *p = malloc(2*PGSIZE);
   if(p == NULL)
     return -1;
   if((uint)p % PGSIZE)
     stack = p + (PGSIZE - (uint)p % PGSIZE);
   else
     stack = p;
-  
-  for(int i = 0; i<NPROC; i++) {
-    if(threadTable[i].inuse == 0) {
-      threadTable[i].inuse = 1;
-      threadTable[i].ustack = stack;
-      break;
-    }
-  }
 
   return clone(start_routine, arg1, arg2, stack);
   
@@ -146,32 +139,24 @@ thread_join(void)
 {
   void **stack = NULL;
   int pid = join(stack);
-  for(int i = 0; i < NPROC; i++){
-    if(threadTable[i].inuse == 1 && threadTable[i].ustack == stack){
-      free(threadTable[i].ustack);
-      threadTable[i].ustack = NULL;
-      threadTable[i].inuse = 0;
-      break;
-    }
-  }
   return pid;
 }
 
 void 
 lock_acquire(lock_t * lock)
 {
-  while(xchg((volatile uint*)lock, (uint)1) == 1)
+  while(xchg((volatile uint *)&lock->flag, (uint)1) == 1)
     ; //spin
 }
 
 void 
 lock_release(lock_t * lock) 
 {
-  xchg((volatile uint*)lock, (uint)0);
+  xchg((volatile uint *)&lock->flag, (uint)0);
 }
 
 void 
 lock_init(lock_t * lock)
 {
-  xchg((volatile uint*)lock, (uint)0);
+  lock->flag = 0;
 }
