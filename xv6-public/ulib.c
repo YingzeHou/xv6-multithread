@@ -4,8 +4,16 @@
 #include "user.h"
 #include "x86.h"
 #include "mmu.h"
+#include "param.h"
 #include <stddef.h>
 
+typedef struct thread_table
+{
+    void *ustack;
+    int inuse;
+} thread_table;
+
+struct thread_table threadTable[NPROC];
 char*
 strcpy(char *s, const char *t)
 {
@@ -110,16 +118,43 @@ memmove(void *vdst, const void *vsrc, int n)
 int 
 thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2)
 {
-  void *stack;
-  stack = malloc(PGSIZE);
+  // void *stack;
+  // stack = malloc(PGSIZE);
+  // return clone(start_routine, arg1, arg2, stack);
+  void *stack, *p = malloc(PGSIZE * 2);
+  if(p == NULL)
+    return -1;
+  if((uint)p % PGSIZE)
+    stack = p + (PGSIZE - (uint)p % PGSIZE);
+  else
+    stack = p;
+  
+  for(int i = 0; i<NPROC; i++) {
+    if(threadTable[i].inuse == 0) {
+      threadTable[i].inuse = 1;
+      threadTable[i].ustack = stack;
+      break;
+    }
+  }
+
   return clone(start_routine, arg1, arg2, stack);
+  
 }
 
 int 
 thread_join(void)
 {
   void **stack = NULL;
-  return join(stack);
+  int pid = join(stack);
+  for(int i = 0; i < NPROC; i++){
+    if(threadTable[i].inuse == 1 && threadTable[i].ustack == stack){
+      free(threadTable[i].ustack);
+      threadTable[i].ustack = NULL;
+      threadTable[i].inuse = 0;
+      break;
+    }
+  }
+  return pid;
 }
 
 void 

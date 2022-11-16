@@ -281,7 +281,7 @@ wait(void)
     // Scan through table looking for exited children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != curproc)
+      if(p->isThread==1 || p->parent != curproc)
         continue;
       havekids = 1;
       if(p->state == ZOMBIE){
@@ -544,26 +544,37 @@ clone(void(*fcn)(void *, void *), void *arg1, void *arg2, void *stack)
   if((uint)stack % PGSIZE !=0)
     return -1;
 
+  if((curproc->sz - (uint)stack) < PGSIZE)
+    return -1;
+
   // Allocate process.
   if((np = allocproc()) == 0)
     return -1;
   
+  if(curproc->isThread == 1) { // Nested condition
+    np->parent = curproc -> parent;
+  }
+  else { // Current is a process, not a thread
+    np->parent = curproc;
+  }
+
   np->pgdir = curproc->pgdir;
   np->sz = curproc->sz;
-  np->parent = curproc;
+  np->parentThread = curproc;
   *np->tf = *curproc->tf;
+  np->isThread = 1;
 
 // curr ->fork: np1 --> np1'parent = curr
 // curr ->clone: npth1 --> npth1'parent = curr
 
 // curr ->clone: npthwithparent --> npthwitharent'parentthread = curr
   np->ustack = stack;
-  np->tf->esp = (uint) stack + PGSIZE - 3*sizeof(void *);
-  *(uint *) np->tf->esp = 0xFFFFFFF;
+  *((uint*) (stack + PGSIZE - 12)) = 0xffffffff;
 
-  *(uint *) (np->tf->esp + sizeof(void *)) = (uint) arg1;
-  *(uint *) (np->tf->esp + 2*sizeof(void *)) = (uint) arg2;
+  *((uint*) (stack + PGSIZE - 4)) = (uint)arg2;
+  *((uint*) (stack + PGSIZE - 8)) = (uint)arg1;
 
+  np->tf->esp = (uint) stack + PGSIZE - 12;
   np->tf->ebp = np->tf->esp;
   np->tf->eip = (uint) fcn;
 
@@ -596,7 +607,7 @@ join(void **stack)
     // Scan through table looking for exited children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != curproc || p->pgdir != curproc->pgdir)
+      if(p->parentThread != curproc)
         continue;
       havekids = 1;
       if(p->state == ZOMBIE){
@@ -607,6 +618,7 @@ join(void **stack)
         // freevm(p->pgdir);
         p->pid = 0;
         p->parent = 0;
+        p->parentThread = 0;
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
