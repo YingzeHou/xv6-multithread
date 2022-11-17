@@ -176,7 +176,7 @@ growproc(int n)
 
   struct proc *p;
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-    if (p->isThread == 1 && p->parent == curproc)
+    if (p!=curproc && p->pgdir == curproc->pgdir)
       p->sz = sz;
   }
   switchuvm(curproc);

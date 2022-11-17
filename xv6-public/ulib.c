@@ -7,7 +7,6 @@
 #include "param.h"
 #include <stddef.h>
 
-struct thread_table threadTable[NPROC];
 char*
 strcpy(char *s, const char *t)
 {
